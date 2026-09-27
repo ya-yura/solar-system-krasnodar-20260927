@@ -27,4 +27,6 @@ py -m http.server 4173
 
 ## Публикация
 
-Проект подготовлен как статический сайт и может быть опубликован на GitHub Pages. URL репозитория и Pages добавляются после создания удалённого репозитория.
+Репозиторий: https://github.com/ya-yura/solar-system-krasnodar-20260927
+
+Живое демо: https://ya-yura.github.io/solar-system-krasnodar-20260927/
