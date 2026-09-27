@@ -108,6 +108,27 @@ let earthDrag=false,earthLastX=0,earthLastY=0; earthCanvas.addEventListener('poi
 function preset(name){let d=new Date(); if(name==='now')d=new Date(); if(name==='full'||name==='lunar')d=new Date('2026-03-03T13:00:00+03:00'); if(name==='new'||name==='solar')d=new Date('2026-02-17T15:00:00+03:00'); if(name==='high')d=new Date('2026-06-21T23:00:00+03:00');if(name==='low')d=new Date('2026-12-21T12:00:00+03:00');if(name==='winter')d=new Date('2026-12-21T12:00:00+03:00');if(name==='summer')d=new Date('2026-06-21T12:00:00+03:00');if(name==='equinox')d=new Date('2026-09-23T12:00:00+03:00');state.simTime=d;state.earthAngle=0;state.moonAngle=0;if(name==='high'||name==='low'){state.moonTilt=5.14} syncInputs();updateModel()} document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>preset(b.dataset.preset)); function applyMode(){const ev=$('earthView'),stage=$('stage');if(state.mode==='space'){stage.style.height='';stage.style.minHeight='';ev.style.display='none'}else if(state.mode==='earth'){stage.style.height='calc(100vh - 90px)';stage.style.minHeight='0';ev.style.display='block';ev.style.position='absolute';ev.style.left='0';ev.style.top='0';ev.style.right='0';ev.style.bottom='0';ev.style.width='100%';ev.style.height='100%';ev.querySelector('.canvas-label').style.display='block';stage.querySelector('.space-hud').style.display='none'}else{stage.style.height='';stage.style.minHeight='';ev.removeAttribute('style');stage.querySelector('.space-hud').style.display='block'}}
 $('viewButton').onclick=()=>{const order=['split','space','earth'];state.mode=order[(order.indexOf(state.mode)+1)%3];$('modeSelect').value=state.mode;applyMode()}; $('helpButton').onclick=()=>$('explain').classList.add('open'); $('closeHelp').onclick=()=>$('explain').classList.remove('open'); $('explain').onclick=e=>{if(e.target.id==='explain')$('explain').classList.remove('open')};
 function animate(now){requestAnimationFrame(animate);const dt=Math.min(60,now-(animate.last||now));animate.last=now;if(state.playing)state.simTime=new Date(state.simTime.getTime()+dt*state.speed);updateModel();controls.update();setRendererSize(spaceRenderer,spaceCanvas,spaceCamera);setRendererSize(earthRenderer,earthCanvas,earthCamera);spaceRenderer.render(spaceScene,spaceCamera);earthRenderer.render(earthScene,earthCamera);if(!timeEditing&&now-lastInputSync>500){syncInputs();lastInputSync=now}} updateModel();applyMode();syncInputs();requestAnimationFrame(animate);
+
+// Единое физическое преобразование: геоцентрическая точка Краснодара,
+// местное звёздное время, наклон оси и гелиоцентрическая долгота Земли.
+const legacyModelUpdate=updateModel;
+function applyPhysicalFrame(){
+  const jd=julian(state.simTime), sidereal=norm(280.46061837+360.98564736629*(jd-2451545)), localSidereal=(sidereal+config.lon)*K, tilt=state.axisTilt*K;
+  const cp=Math.cos(krasnodarLat),sp=Math.sin(krasnodarLat),cl=Math.cos(localSidereal),sl=Math.sin(localSidereal),ct=Math.cos(tilt),st=Math.sin(tilt);
+  const targetNormal=new THREE.Vector3(cp*cl,sp*ct-cp*sl*st,cp*sl*ct+sp*st).normalize();
+  const targetAxis=new THREE.Vector3(0,ct,st).normalize();
+  const q=new THREE.Quaternion().setFromUnitVectors(krasnodarNormal,targetNormal);
+  const mappedNorth=krasnodarNorth.clone().applyQuaternion(q).normalize();
+  const tangentAxis=targetAxis.clone().sub(targetNormal.clone().multiplyScalar(targetAxis.dot(targetNormal))).normalize();
+  const twist=Math.atan2(targetNormal.dot(mappedNorth.clone().cross(tangentAxis)),mappedNorth.dot(tangentAxis));
+  q.premultiply(new THREE.Quaternion().setFromAxisAngle(targetNormal,twist));
+  earth.quaternion.copy(q);
+  let earthLongitude=(state.simTime-new Date(state.simTime.getFullYear(),0,1))/(new Date(state.simTime.getFullYear()+1,0,1)-new Date(state.simTime.getFullYear(),0,1))*Math.PI*2;
+  if(astroObserver){try{earthLongitude=Astronomy.EclipticLongitude(Astronomy.Body.Earth,astroMoment(state.simTime))*K}catch{}}
+  earthPivot.position.set(Math.cos(earthLongitude+state.earthAngle*K)*earthOrbitRadius,0,Math.sin(earthLongitude+state.earthAngle*K)*earthOrbitRadius);
+  axes.position.copy(earthPivot.position);axes.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),targetAxis);
+}
+updateModel=()=>{legacyModelUpdate();applyPhysicalFrame()};
 </script>
 </body>
 </html>
