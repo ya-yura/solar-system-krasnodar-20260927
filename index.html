@@ -125,6 +125,23 @@ function applyPhysicalFrame(){
   earth.quaternion.copy(q);
   let earthLongitude=(state.simTime-new Date(state.simTime.getFullYear(),0,1))/(new Date(state.simTime.getFullYear()+1,0,1)-new Date(state.simTime.getFullYear(),0,1))*Math.PI*2;
   if(astroObserver){try{earthLongitude=Astronomy.EclipticLongitude(Astronomy.Body.Earth,astroMoment(state.simTime))*K}catch{}}
+  // Календарь на орбите должен быть в том же физическом масштабе, что и Земля.
+  // Нулевая отметка циферблата — положение Земли 1 января текущего года,
+  // поэтому «Новый год» больше не остаётся в фиксированной точке сцены.
+  let januaryLongitude=earthLongitude;
+  if(astroObserver){
+    try{
+      const january=new Date(Date.UTC(state.simTime.getFullYear(),0,1,12,0,0));
+      januaryLongitude=Astronomy.EclipticLongitude(Astronomy.Body.Earth,astroMoment(january))*K;
+    }catch{}
+  } else {
+    const yearStart=new Date(state.simTime.getFullYear(),0,1);
+    const yearEnd=new Date(state.simTime.getFullYear()+1,0,1);
+    const progress=(state.simTime-yearStart)/(yearEnd-yearStart);
+    januaryLongitude=earthLongitude-progress*Math.PI*2;
+  }
+  // Для группы с точками x=cos(a), z=sin(a) поворот вокруг Y имеет знак минус.
+  monthDial.rotation.y=-januaryLongitude;
   earthPivot.position.set(Math.cos(earthLongitude+state.earthAngle*K)*earthOrbitRadius,0,Math.sin(earthLongitude+state.earthAngle*K)*earthOrbitRadius);
   axes.position.copy(earthPivot.position);axes.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),targetAxis);
 }
